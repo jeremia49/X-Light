@@ -194,28 +194,28 @@ class SUMOBaseRunner(object):
 
     def restore(self, model_interval):
         """Restore policy's networks from a saved model."""
-        policy_shared_NN_state_dict = torch.load(str(self.model_dir) + f'/shared_NN_{model_interval}.pt')
+        policy_shared_NN_state_dict = torch.load(str(self.model_dir) + f'/shared_NN_{model_interval}.pt', weights_only=False)
         self.policy.shared_NN.load_state_dict(policy_shared_NN_state_dict)
-        policy_actor_state_dict = torch.load(str(self.model_dir) + f'/actor_{model_interval}.pt')
+        policy_actor_state_dict = torch.load(str(self.model_dir) + f'/actor_{model_interval}.pt', weights_only=False)
         self.policy.actor.load_state_dict(policy_actor_state_dict)
         if not self.all_args.use_render:
-            policy_critic_state_dict = torch.load(str(self.model_dir) + f'/critic_{model_interval}.pt')
+            policy_critic_state_dict = torch.load(str(self.model_dir) + f'/critic_{model_interval}.pt', weights_only=False)
             self.policy.critic.load_state_dict(policy_critic_state_dict)
             if self.trainer._use_valuenorm:
-                policy_vnorm_state_dict = torch.load(str(self.model_dir) + f'/vnorm_{model_interval}.pt')
+                policy_vnorm_state_dict = torch.load(str(self.model_dir) + f'/vnorm_{model_interval}.pt', weights_only=False)
                 self.trainer.value_normalizer.load_state_dict(policy_vnorm_state_dict)
         print("Load model done: {}".format(str(self.model_dir) + f'/shared_NN_{model_interval}.pt'))
 
     def restore2(self, path, model_interval):
-        policy_shared_NN_state_dict = torch.load(path + f'/shared_NN_{model_interval}.pt', map_location=torch.device('cpu'))
+        policy_shared_NN_state_dict = torch.load(path + f'/shared_NN_{model_interval}.pt', map_location=torch.device('cpu'), weights_only=False)
         self.policy.shared_NN.load_state_dict(policy_shared_NN_state_dict)
-        policy_actor_state_dict = torch.load(path + f'/actor_{model_interval}.pt', map_location=torch.device('cpu'))
+        policy_actor_state_dict = torch.load(path + f'/actor_{model_interval}.pt', map_location=torch.device('cpu'), weights_only=False)
         self.policy.actor.load_state_dict(policy_actor_state_dict)
         if not self.all_args.use_render:
-            policy_critic_state_dict = torch.load(path + f'/critic_{model_interval}.pt', map_location=torch.device('cpu'))
+            policy_critic_state_dict = torch.load(path + f'/critic_{model_interval}.pt', map_location=torch.device('cpu'), weights_only=False)
             self.policy.critic.load_state_dict(policy_critic_state_dict)
             if self.trainer._use_valuenorm:
-                policy_vnorm_state_dict = torch.load(path + f'/vnorm_{model_interval}.pt', map_location=torch.device('cpu'))
+                policy_vnorm_state_dict = torch.load(path + f'/vnorm_{model_interval}.pt', map_location=torch.device('cpu'), weights_only=False)
                 self.trainer.value_normalizer.load_state_dict(policy_vnorm_state_dict)
         print("Load model done: {}".format(path + f'/shared_NN_{model_interval}.pt'))
  
@@ -389,13 +389,13 @@ class Runner(object):
 
     def restore(self):
         """Restore policy's networks from a saved model."""
-        policy_actor_state_dict = torch.load(str(self.model_dir) + '/actor_0.pt')
+        policy_actor_state_dict = torch.load(str(self.model_dir) + '/actor_0.pt', weights_only=False)
         self.policy.actor.load_state_dict(policy_actor_state_dict)
         if not self.all_args.use_render:
-            policy_critic_state_dict = torch.load(str(self.model_dir) + '/critic_0.pt')
+            policy_critic_state_dict = torch.load(str(self.model_dir) + '/critic_0.pt', weights_only=False)
             self.policy.critic.load_state_dict(policy_critic_state_dict)
             if self.trainer._use_valuenorm:
-                policy_vnorm_state_dict = torch.load(str(self.model_dir) + '/vnorm.pt')
+                policy_vnorm_state_dict = torch.load(str(self.model_dir) + '/vnorm.pt', weights_only=False)
                 self.trainer.value_normalizer.load_state_dict(policy_vnorm_state_dict)
  
     def log_train(self, train_infos, total_num_steps):

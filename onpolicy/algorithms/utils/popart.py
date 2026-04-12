@@ -85,13 +85,13 @@ class PopArt(torch.nn.Module):
         self.mean_sq.mul_(self.beta).add_(batch_sq_mean * (1.0 - self.beta))
         self.debiasing_term.mul_(self.beta).add_(1.0 * (1.0 - self.beta))
 
-        self.stddev = (self.mean_sq - self.mean ** 2).sqrt().clamp(min=1e-4)
-        
+        self.stddev.data = (self.mean_sq - self.mean ** 2).sqrt().clamp(min=1e-4)
+
         new_mean, new_var = self.debiased_mean_var()
         new_stddev = torch.sqrt(new_var)
-        
-        self.weight = self.weight * old_stddev / new_stddev
-        self.bias = (old_stddev * self.bias + old_mean - new_mean) / new_stddev
+
+        self.weight.data = (self.weight.data * old_stddev / new_stddev)
+        self.bias.data = (old_stddev * self.bias.data + old_mean - new_mean) / new_stddev
 
     def debiased_mean_var(self):
         """Hitung mean dan variansi yang telah di-debias dari EMA."""

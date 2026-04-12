@@ -52,7 +52,7 @@ class FixedNormal(torch.distributions.Normal):
         return super().log_prob(actions).sum(-1, keepdim=True)
 
     def entropy(self):
-        return super.entropy().sum(-1)
+        return super().entropy().sum(-1)
 
     def mode(self):
         return self.mean
@@ -63,7 +63,7 @@ class FixedBernoulli(torch.distributions.Bernoulli):
     """Distribusi Bernoulli dengan antarmuka yang disesuaikan untuk ruang aksi biner."""
 
     def log_probs(self, actions):
-        return super.log_prob(actions).view(actions.size(0), -1).sum(-1).unsqueeze(-1)
+        return super().log_prob(actions).view(actions.size(0), -1).sum(-1).unsqueeze(-1)
 
     def entropy(self):
         return super().entropy().sum(-1)
