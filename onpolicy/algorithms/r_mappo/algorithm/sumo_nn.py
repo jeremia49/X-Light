@@ -136,12 +136,13 @@ class TransformerEncoderLayerNoLN(nn.Module):
             state['activation'] = F.relu
         super(TransformerEncoderLayerNoLN, self).__setstate__(state)
 
-    def forward(self, src, src_mask=None, src_key_padding_mask=None):
+    def forward(self, src, src_mask=None, src_key_padding_mask=None, is_causal=False):
         r"""Pass the input through the encoder layer.
         Args:
             src: the sequence to the encoder layer (required).
             src_mask: the mask for the src sequence (optional).
             src_key_padding_mask: the mask for the src keys per batch (optional).
+            is_causal: ignored, accepted for compatibility with PyTorch 2.x TransformerEncoder.
         Shape:
             see the docs in Transformer class.
         """
