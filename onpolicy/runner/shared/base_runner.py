@@ -1,3 +1,25 @@
+"""
+base_runner.py (runner/shared)
+===============================
+Kelas dasar runner pelatihan dengan kebijakan bersama (shared policy).
+
+Berisi dua kelas runner:
+    - SUMOBaseRunner : Runner utama untuk pelatihan di lingkungan SUMO.
+                       Mendukung co-training multi-skenario, penyimpanan
+                       model berkala, dan logging via TensorBoard/WandB.
+    - Runner         : Runner dasar generik untuk lingkungan non-SUMO
+                       (misal: MPE). Aktor dan kritik memiliki optimizer
+                       terpisah.
+
+Kedua kelas menyediakan:
+    - run()          : Loop pelatihan utama (diimplementasikan di subkelas).
+    - compute()      : Hitung return / value bootstrap untuk buffer.
+    - train()        : Eksekusi satu iterasi training dari buffer.
+    - save()         : Simpan bobot model ke disk.
+    - restore()      : Muat bobot model dari disk.
+    - log_train()    : Catat metrik training ke TensorBoard/WandB.
+    - log_env()      : Catat metrik lingkungan ke TensorBoard/WandB.
+"""
 import wandb
 import os
 import re

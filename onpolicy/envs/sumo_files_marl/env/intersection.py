@@ -1,11 +1,45 @@
 #!/usr/bin/env python3
 # encoding: utf-8
+"""
+intersection.py
+===============
+Model satu persimpangan lalu lintas dalam simulasi SUMO.
+
+Kelas ``Intersection`` merepresentasikan satu traffic light dan bertanggung jawab untuk:
+    - Menentukan urutan lajur masuk/keluar berdasarkan arah kompas (N-W-S-E).
+    - Membangun logika fase kustom 8-fase (A–H) sesuai standar X-Light.
+    - Menghitung observasi state: jumlah kendaraan, panjang antrian, flow, dll.
+    - Menghitung reward: queue length, wait time, delay time, pressure, flow.
+    - Mengelola peralihan fase (green → yellow → green) di simulator.
+
+Urutan fase (A–H):
+    A = west-through + east-through
+    B = east-left + east-through
+    C = west-left + west-through
+    D = east-left + west-left
+    E = north-through + south-through
+    F = south-left + south-through
+    G = north-through + north-left
+    H = north-left + south-left
+"""
 import numpy as np
 import re
 # from onpolicy.envs.sumo_files_marl.tsc.utils import get_vector_cos_sim
 
 
 class Intersection:
+    """
+    Representasi satu persimpangan lalu lintas.
+
+    :param tl_id:       (str) ID traffic light di SUMO.
+    :param msg:         (dict) Informasi infrastruktur dari TSCSimulator
+                        (lajur, posisi, adjacency).
+    :param env:         (TSCSimulator) Referensi ke simulator induk.
+    :param state:       (list of str) Kunci observasi yang digunakan
+                        (misal: 'car_num', 'queue_length', 'flow').
+    :param not_default: (bool) Jika True, ganti logika fase SUMO dengan
+                        fase kustom 8-fase standar X-Light.
+    """
     def __init__(self, tl_id, msg, env,
                  state=['current_phase', 'car_num', 'queue_length', "occupancy", 'flow',
                         'stop_car_num'], not_default=True):
@@ -122,6 +156,11 @@ class Intersection:
         #         self.yellow_phases.append(idx)
 
     def get_tl_ava(self):
+        """
+        Cek apakah persimpangan ini valid dan dapat digunakan dalam pelatihan.
+
+        :return: (bool) True jika persimpangan valid.
+        """
         return self.tl_ava
 
     def _phase_index(self):
@@ -145,6 +184,11 @@ class Intersection:
                     self.phase_index.append([])
 
     def get_phase_index(self):
+        """
+        Dapatkan peta fase ke indeks lampu lalu lintas.
+
+        :return: (list of list) Setiap elemen berisi daftar indeks lampu untuk satu fase.
+        """
         return self.phase_index
 
     @staticmethod
@@ -369,10 +413,16 @@ class Intersection:
         return "".join(yellow_phase)
 
     def update_timestep(self):
+        """Perbarui informasi kendaraan di semua lajur untuk langkah waktu saat ini."""
         self._previous_lane_vehicle_dict = self._lane_vehicle_dict.copy()
         self._update_lane_vehicle_info()
 
     def get_lane_traffic_volumn(self):
+        """
+        Hitung volume lalu lintas per lajur (kendaraan yang melintas per detik).
+
+        :return: (dict) lane_id → volume lalu lintas (kendaraan/detik).
+        """
         traffic_volumn_dict = {}
         now_all_incoming_lanes_veh = set()
         for lane in self._incoming_lanes:
@@ -389,6 +439,11 @@ class Intersection:
         return traffic_volumn_dict
 
     def get_lane_queue_len(self):
+        """
+        Dapatkan panjang antrian (meter) untuk setiap lajur masuk.
+
+        :return: (dict) lane_id → panjang antrian dalam meter.
+        """
         queue_len_dict = {}
         for lane in self._incoming_lanes:
             queue_len = self._env.sim.lanearea.getJamLengthMeters(lane)
@@ -403,6 +458,11 @@ class Intersection:
                     self._env.vehicle_info[veh] = {}
 
     def get_lane_car_number(self):
+        """
+        Dapatkan jumlah kendaraan yang berhenti per lajur masuk.
+
+        :return: (dict) lane_id → jumlah kendaraan berhenti.
+        """
         car_number_dict = {}
         for lane in self._incoming_lanes:
             car_number = self._env.sim.lanearea.getLastStepHaltingNumber(lane)
@@ -410,6 +470,11 @@ class Intersection:
         return car_number_dict
 
     def get_lane_wait_time(self):
+        """
+        Hitung total waktu tunggu kendaraan yang baru ditambahkan per lajur.
+
+        :return: (dict) lane_id → waktu tunggu tambahan (detik).
+        """
         wait_time_dict = {}
         for lane in self._incoming_lanes:
             wait_time = 0
@@ -423,6 +488,11 @@ class Intersection:
         return wait_time_dict
 
     def get_lane_delay_time(self):
+        """
+        Hitung waktu terlambat kendaraan dibandingkan kecepatan maksimal per lajur.
+
+        :return: (dict) lane_id → waktu keterlambatan (detik).
+        """
         delay_time_dict = {}
         for lane in self._incoming_lanes + self._outgoing_lanes:
             delay_time = 0
@@ -444,6 +514,11 @@ class Intersection:
         return delay_time_dict
 
     def get_pressure(self):
+        """
+        Hitung pressure persimpangan: selisih kendaraan berhenti di lajur masuk vs keluar.
+
+        :return: (float) Nilai pressure (selalu non-negatif).
+        """
         pressure = 0
         for lane in self._incoming_lanes:
             pressure += self._env.sim.lane.getLastStepHaltingNumber(lane)
@@ -476,6 +551,17 @@ class Intersection:
         return reward
 
     def get_state(self):
+        """
+        Kumpulkan vektor observasi lengkap untuk persimpangan ini.
+
+        Setiap arah lajur (N-W-S-E × kiri/lurus) menghasilkan satu entri
+        dengan kunci yang ditentukan oleh ``self.state``.
+
+        :return: (tuple)
+            - main_direction_lanes: (list of dict) Observasi per arah lajur.
+            - mask:                 (list of int) 1 jika arah tidak tersedia, 0 jika ada.
+            - nearset_inter:        (list) Informasi adjacency persimpangan tetangga.
+        """
         inline_car_number = {}
         inline_occupancy = {}
         inline_speed = {}

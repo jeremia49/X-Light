@@ -1,9 +1,28 @@
+"""
+mlp.py
+======
+Modul Multi-Layer Perceptron (MLP) untuk pemrosesan fitur dalam jaringan aktor/kritik.
+
+Kelas:
+    - MLPLayer : Blok MLP dengan Layer Normalization dan aktivasi, mendukung N lapisan.
+    - MLPBase  : Pembungkus MLPLayer yang membaca konfigurasi dari argumen pelatihan.
+"""
 import torch.nn as nn
 from .util import init, get_clones
 
-"""MLP modules."""
 
 class MLPLayer(nn.Module):
+    """
+    Blok Multi-Layer Perceptron dengan Layer Normalization.
+
+    Arsitektur: Linear → Aktivasi → LayerNorm, diulang layer_N kali.
+
+    :param input_dim:      (int) Dimensi fitur masukan.
+    :param hidden_size:    (int) Dimensi lapisan tersembunyi.
+    :param layer_N:        (int) Jumlah lapisan tersembunyi.
+    :param use_orthogonal: (bool) Gunakan inisialisasi ortogonal.
+    :param use_ReLU:       (bool) Gunakan ReLU bila True, Tanh bila False.
+    """
     def __init__(self, input_dim, hidden_size, layer_N, use_orthogonal, use_ReLU):
         super(MLPLayer, self).__init__()
         self._layer_N = layer_N
@@ -29,6 +48,16 @@ class MLPLayer(nn.Module):
 
 
 class MLPBase(nn.Module):
+    """
+    Pembungkus MLPLayer yang membaca konfigurasi dari argumen pelatihan.
+
+    Mendukung normalisasi fitur masukan (LayerNorm) sebelum diproses oleh MLP.
+
+    :param args:           (argparse.Namespace) Argumen pelatihan.
+    :param obs_shape:      (tuple) Bentuk observasi masukan.
+    :param cat_self:       (bool) Tidak digunakan (reserved).
+    :param attn_internal:  (bool) Tidak digunakan (reserved).
+    """
     def __init__(self, args, obs_shape, cat_self=True, attn_internal=False):
         super(MLPBase, self).__init__()
 

@@ -1,5 +1,22 @@
 """
-Modified from OpenAI Baselines code to work with multi-agent envs
+env_wrappers.py (envs)
+=======================
+Wrapper vektorisasi lingkungan untuk pelatihan MARL paralel.
+
+Diadaptasi dari OpenAI Baselines untuk mendukung multi-agent environments.
+
+Kelas yang tersedia:
+    - CloudpickleWrapper : Wrapper serialisasi menggunakan cloudpickle agar
+                           fungsi env dapat dikirim antar proses.
+    - ShareVecEnv        : Kelas abstrak untuk semua vectorized environments.
+                           Mendefinisikan antarmuka reset(), step_async(),
+                           step_wait(), render(), dan close().
+    - SubprocVecEnv      : Jalankan setiap env dalam proses terpisah (subprocess).
+                           Digunakan untuk pelatihan multi-thread sejati.
+                           Mendukung flag cotrain untuk co-training multi-skenario.
+    - DummyVecEnv        : Jalankan semua env secara sinkron dalam satu proses.
+                           Lebih mudah untuk debugging karena tidak ada
+                           multiprocessing overhead.
 """
 import numpy as np
 import torch

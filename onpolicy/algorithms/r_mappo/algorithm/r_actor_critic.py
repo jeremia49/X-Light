@@ -1,3 +1,18 @@
+"""
+r_actor_critic.py
+=================
+Mendefinisikan arsitektur jaringan neural untuk Actor dan Critic dalam algoritma
+MAPPO (Multi-Agent Proximal Policy Optimization) yang digunakan pada X-Light.
+
+Kelas utama:
+    - R_Actor_SUMO  : Jaringan aktor khusus SUMO, menghasilkan distribusi aksi
+                      berdasarkan keluaran shared_NN (Transformer).
+    - R_Critic_SUMO : Jaringan kritik SUMO, mengestimasi nilai fungsi value.
+    - shared_NN     : Jaringan Transformer bersama yang digunakan oleh actor
+                      dan critic untuk mengekstrak representasi observasi.
+    - R_Actor       : Aktor generik dengan dukungan RNN/GRU.
+    - R_Critic      : Kritik generik dengan dukungan RNN/GRU.
+"""
 import torch
 import torch.nn as nn
 from onpolicy.algorithms.utils.util import init, check
@@ -119,6 +134,15 @@ class R_Actor_SUMO(nn.Module):
         return action_log_probs, dist_entropy
 
 class R_Critic_SUMO(nn.Module):
+    """
+    Jaringan Critic khusus lingkungan SUMO.
+
+    Menerima representasi tersembunyi dari shared_NN (keluaran Transformer)
+    dan menghasilkan estimasi nilai (value) serta prediksi state berikutnya.
+
+    :param hidden_size: (int) Ukuran dimensi masukan dari shared_NN.
+    :param device:      (torch.device) Perangkat komputasi (cpu/gpu).
+    """
     def __init__(self, hidden_size, device):
         super(R_Critic_SUMO, self).__init__()
         self.name = 'critic'
@@ -129,13 +153,29 @@ class R_Critic_SUMO(nn.Module):
         self.to(device)
 
     def forward(self, policy_head_input):
+        """
+        Estimasi nilai (value) dari representasi tersembunyi.
+
+        :param policy_head_input: (torch.Tensor) Keluaran Transformer, bentuk [B, 114].
+        :return v: (torch.Tensor) Prediksi nilai skalar, bentuk [B, 1].
+        :return p: (torch.Tensor) Prediksi observasi berikutnya, bentuk [B, 56].
+        """
         policy_head_input = check(policy_head_input).to(**self.tpdv)
         v, p = self._value_head(policy_head_input)
         return v, p
 
 
 class shared_NN(nn.Module):
-    def __init__(self, device):   
+    """
+    Jaringan bersama (shared) berbasis Transformer yang dipakai oleh Actor dan Critic.
+
+    Menggunakan arsitektur "Transformer on Transformer" (dua tingkat Transformer):
+    - Inner Transformer: mengkodekan setiap observasi per-arah lajur.
+    - Outer Transformer: mengolah urutan waktu dari inner representation.
+
+    :param device: (torch.device) Perangkat komputasi (cpu/gpu).
+    """
+    def __init__(self, device):
         super(shared_NN, self).__init__()
         self.name = 'shared_NN'
         self.iner_ps_encoding = PositionalEncoding(
@@ -155,6 +195,17 @@ class shared_NN(nn.Module):
         self.to(device)
 
     def forward(self, observations):
+        """
+        Proses urutan observasi menjadi representasi tersembunyi.
+
+        :param observations: (np.ndarray / torch.Tensor) Observasi agen,
+                             bentuk [T, B, obs_dim] (time, batch, obs_dim).
+        :return policy_head_input: (torch.Tensor) Vektor representasi untuk Actor/Critic,
+                                    bentuk [B, 114].
+        :return pred:       (torch.Tensor) Prediksi state masa depan (auxiliary task).
+        :return pred_ele:   (torch.Tensor) Elemen prediksi dari Transformer.
+        :return pred_mask:  (torch.Tensor) Mask validitas prediksi.
+        """
         observations = check(observations).to(**self.tpdv)
         policy_head_input, transformer_output, pred, pred_ele, pred_mask = self.shared_NN.compute_memories(observations)
         return policy_head_input, pred, pred_ele, pred_mask

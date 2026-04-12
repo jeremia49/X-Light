@@ -1,12 +1,41 @@
+"""
+util.py (utils)
+===============
+Fungsi utilitas umum untuk pelatihan MARL dalam X-Light.
+
+Fungsi yang tersedia:
+    - check                 : Konversi numpy array ke torch Tensor.
+    - get_gard_norm         : Hitung norma gradien dari parameter.
+    - update_linear_schedule: Kurangi learning rate secara linear.
+    - huber_loss            : Hitung Huber loss (lebih robust dari MSE).
+    - mse_loss              : Hitung MSE loss sederhana.
+    - get_shape_from_obs_space: Ekstrak bentuk dari gym.Space observasi.
+    - get_shape_from_act_space: Ekstrak bentuk dari gym.Space aksi.
+    - tile_images           : Gabungkan N gambar menjadi satu grid gambar.
+"""
 import numpy as np
 import math
 import torch
 
+
 def check(input):
+    """
+    Konversi numpy array ke torch Tensor. Lewati jika sudah berupa Tensor.
+
+    :param input: (np.ndarray atau torch.Tensor) Data masukan.
+    :return:      (torch.Tensor) Data sebagai Tensor.
+    """
     if type(input) == np.ndarray:
         return torch.from_numpy(input)
-        
+
+
 def get_gard_norm(it):
+    """
+    Hitung norma total gradien dari iterator parameter.
+
+    :param it: (iterable) Iterator parameter torch (misal: model.parameters()).
+    :return:   (float) Norma L2 dari semua gradien.
+    """
     sum_grad = 0
     for x in it:
         if x.grad is None:
@@ -21,14 +50,35 @@ def update_linear_schedule(optimizer, epoch, total_num_epochs, initial_lr):
         param_group['lr'] = lr
 
 def huber_loss(e, d):
+    """
+    Hitung Huber loss: kuadratik untuk error kecil, linear untuk error besar.
+
+    :param e: (torch.Tensor) Error (prediksi - target).
+    :param d: (float) Threshold delta yang membatasi peralihan kuadratik/linear.
+    :return:  (torch.Tensor) Nilai Huber loss per elemen.
+    """
     a = (abs(e) <= d).float()
     b = (abs(e) > d).float()
     return a*e**2/2 + b*d*(abs(e)-d/2)
 
+
 def mse_loss(e):
+    """
+    Hitung Mean Squared Error loss sederhana.
+
+    :param e: (torch.Tensor) Error (prediksi - target).
+    :return:  (torch.Tensor) Nilai MSE per elemen.
+    """
     return e**2/2
 
+
 def get_shape_from_obs_space(obs_space):
+    """
+    Ekstrak bentuk (shape) dari gym observation space.
+
+    :param obs_space: (gym.Space) Ruang observasi.
+    :return:          (tuple) Bentuk observasi.
+    """
     if obs_space.__class__.__name__ == 'Box':
         obs_shape = obs_space.shape
     elif obs_space.__class__.__name__ == 'list':
@@ -38,6 +88,12 @@ def get_shape_from_obs_space(obs_space):
     return obs_shape
 
 def get_shape_from_act_space(act_space):
+    """
+    Ekstrak bentuk (shape) dari gym action space.
+
+    :param act_space: (gym.Space) Ruang aksi.
+    :return:          (int atau tuple) Dimensi aksi.
+    """
     if act_space.__class__.__name__ == 'Discrete':
         act_shape = 1
     elif act_space.__class__.__name__ == "MultiDiscrete":

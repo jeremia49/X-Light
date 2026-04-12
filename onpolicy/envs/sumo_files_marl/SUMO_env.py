@@ -1,3 +1,17 @@
+"""
+SUMO_env.py
+===========
+Pembungkus (wrapper) lingkungan SUMO yang menyesuaikannya dengan antarmuka
+standar multi-agent gym yang digunakan oleh kerangka MARL X-Light.
+
+Kelas ``SUMOEnv`` bertindak sebagai penghubung antara simulator lalu lintas
+SUMO (melalui TSCSimulator) dan algoritma pelatihan. Tanggung jawabnya:
+    - Menginisialisasi skenario SUMO dari file .sumocfg.
+    - Mendefinisikan ruang aksi dan observasi untuk setiap agen (persimpangan).
+    - Mengubah output SUMO menjadi observasi tensor yang siap diproses Transformer.
+    - Menyimpan riwayat observasi (MDP sequence) sepanjang ``mdp_length`` langkah.
+    - Mengelola reward, done flag, dan aksi yang tersedia (available actions).
+"""
 import random
 
 # import gfootball.env as football_env
@@ -16,7 +30,17 @@ import ast
 
 
 class SUMOEnv(object):
-    '''Wrapper to make Google Research Football environment compatible'''
+    """
+    Wrapper lingkungan SUMO yang kompatibel dengan antarmuka multi-agent gym.
+
+    Mengintegrasikan TSCSimulator dengan alur pelatihan MARL:
+    mengonversi observasi raw SUMO menjadi tensor yang siap diproses Transformer,
+    mengelola urutan MDP, dan mengekspos ruang aksi/observasi standar.
+
+    :param args:   (argparse.Namespace) Argumen pelatihan global.
+    :param rank:   (int) Indeks lingkungan paralel (digunakan untuk port SUMO & seed).
+    :param config: (dict) Konfigurasi lingkungan dari sumo_files_marl/config.py.
+    """
 
     def __init__(self, args, rank, config):
         
@@ -70,15 +94,32 @@ class SUMOEnv(object):
 
 
     def get_unava_phase_index(self):
+        """
+        Dapatkan daftar indeks fase yang tidak tersedia untuk setiap persimpangan.
+
+        :return: (np.ndarray) Array indeks fase tidak tersedia per agen, bentuk [num_agents, ...].
+        """
         return np.array(self.unava_phase_index)
-    
+
     def set_seed(self, seed):
+        """
+        Tetapkan seed acak untuk numpy, random, dan torch.
+
+        :param seed: (int) Nilai seed.
+        """
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
         return
 
     def get_reward(self, reward, all_tls):
+        """
+        Agregasikan reward per metrik menjadi satu nilai skalar per agen.
+
+        :param reward:   (dict) Reward per persimpangan dan per metrik.
+        :param all_tls:  (list) Daftar ID persimpangan aktif.
+        :return:         (np.ndarray) Reward total per agen, bentuk [num_agents].
+        """
         ans = []
         for i in all_tls:
             ans.append(sum(reward[i].values()))
@@ -188,6 +229,16 @@ class SUMOEnv(object):
         return obs_batch    
     
     def state_(self, state, pre_reward, pre_action, pre_done):
+        """
+        Bentuk observasi lengkap per agen dengan menambahkan konteks tetangga
+        dan informasi historis (reward, aksi, done dari langkah sebelumnya).
+
+        :param state:       (dict) Observasi batch (keluaran self.batch()).
+        :param pre_reward:  (torch.Tensor) Reward langkah sebelumnya, bentuk [N, 1].
+        :param pre_action:  (torch.Tensor) Aksi one-hot langkah sebelumnya, bentuk [N, 8].
+        :param pre_done:    (torch.Tensor) Done flag langkah sebelumnya, bentuk [N, 1].
+        :return:            (torch.Tensor) Observasi gabungan, bentuk [1, N, obs_dim].
+        """
         neighbor_index = state['neighbor_index']
         neighbor_index = torch.cat([torch.arange(neighbor_index.shape[0]).unsqueeze(1), neighbor_index], dim=1)
         state_all = []
@@ -208,6 +259,14 @@ class SUMOEnv(object):
         return state_self_nei       
     
     def reset(self):
+        """
+        Reset lingkungan simulasi dan kembalikan observasi awal.
+
+        Menginisialisasi reward, aksi, done flag, dan riwayat MDP ke nol,
+        lalu mengembalikan observasi sekuensial berukuran [mdp_length, N, obs_dim].
+
+        :return: (torch.Tensor) Observasi awal, bentuk [mdp_length, num_agents, obs_dim].
+        """
         obs = self.env.reset()
         self.pre_reward = torch.FloatTensor(np.zeros((len(self.env.all_tls), 1)))
         self.pre_done = torch.FloatTensor(np.zeros((len(self.env.all_tls), 1)))
@@ -223,6 +282,15 @@ class SUMOEnv(object):
         return obs_values
 
     def step(self, action):
+        """
+        Jalankan satu langkah simulasi dengan aksi yang diberikan.
+
+        :param action: (np.ndarray) Indeks fase yang dipilih untuk setiap agen, bentuk [num_agents].
+        :return obs:     (torch.Tensor) Observasi berikutnya, bentuk [mdp_length, num_agents, obs_dim].
+        :return reward:  (np.ndarray) Reward per agen, bentuk [num_agents, 1].
+        :return done:    (np.ndarray) Flag selesai per agen, bentuk [num_agents].
+        :return info:    (dict) Informasi tambahan dari simulator.
+        """
         tl_action_select = {}
         for tl_index in range(len(self.env.all_tls)):
             tl_action_select[self.env.all_tls[tl_index]] = \
@@ -251,15 +319,27 @@ class SUMOEnv(object):
         return obs_values, reward, done, info
 
     def seed(self, seed=None):
+        """
+        Tetapkan seed acak untuk lingkungan.
+
+        :param seed: (int atau None) Nilai seed; jika None, gunakan seed default 1.
+        """
         if seed is None:
             random.seed(1)
         else:
             random.seed(seed)
 
     def close(self):
+        """Tutup koneksi SUMO dan bersihkan sumber daya simulator."""
         self.env.terminate()
 
     def _obs_wrapper(self, obs):
+        """
+        Tangani kasus edge saat hanya ada satu agen (tambahkan dimensi batch).
+
+        :param obs: (torch.Tensor) Observasi mentah.
+        :return:    (torch.Tensor) Observasi dengan dimensi batch yang benar.
+        """
         if self.num_agents == 1:
             return obs[np.newaxis, :]
         else:

@@ -1,10 +1,24 @@
+"""
+distributions.py
+================
+Distribusi probabilitas aksi yang dimodifikasi agar kompatibel dengan kerangka MARL.
+
+Menyediakan antarmuka seragam (sample, log_probs, mode, entropy) untuk berbagai
+jenis distribusi yang digunakan pada ruang aksi yang berbeda:
+
+    - FixedCategorical  : Distribusi diskrit (untuk aksi pilih-satu).
+    - FixedNormal       : Distribusi Gaussian (untuk aksi kontinu).
+    - FixedBernoulli    : Distribusi Bernoulli (untuk aksi biner).
+
+Lapisan pembungkus (menghasilkan distribusi dari fitur neural network):
+    - Categorical       : Menghasilkan FixedCategorical dari fitur tersembunyi.
+    - DiagGaussian      : Menghasilkan FixedNormal dengan std yang dapat dipelajari.
+    - Bernoulli         : Menghasilkan FixedBernoulli dari fitur tersembunyi.
+    - AddBias           : Menambahkan bias yang dapat dipelajari ke tensor.
+"""
 import torch
 import torch.nn as nn
 from .util import init
-
-"""
-Modify standard PyTorch distributions so they to make compatible with this codebase. 
-"""
 
 #
 # Standardize distribution interfaces
@@ -12,6 +26,8 @@ Modify standard PyTorch distributions so they to make compatible with this codeb
 
 # Categorical
 class FixedCategorical(torch.distributions.Categorical):
+    """Distribusi Categorical dengan antarmuka yang disesuaikan untuk MARL."""
+
     def sample(self):
         return super().sample().unsqueeze(-1)
 
@@ -30,6 +46,8 @@ class FixedCategorical(torch.distributions.Categorical):
 
 # Normal
 class FixedNormal(torch.distributions.Normal):
+    """Distribusi Normal dengan antarmuka yang disesuaikan untuk ruang aksi kontinu."""
+
     def log_probs(self, actions):
         return super().log_prob(actions).sum(-1, keepdim=True)
 
@@ -42,6 +60,8 @@ class FixedNormal(torch.distributions.Normal):
 
 # Bernoulli
 class FixedBernoulli(torch.distributions.Bernoulli):
+    """Distribusi Bernoulli dengan antarmuka yang disesuaikan untuk ruang aksi biner."""
+
     def log_probs(self, actions):
         return super.log_prob(actions).view(actions.size(0), -1).sum(-1).unsqueeze(-1)
 
@@ -53,6 +73,14 @@ class FixedBernoulli(torch.distributions.Bernoulli):
 
 
 class Categorical(nn.Module):
+    """
+    Lapisan linear yang menghasilkan distribusi FixedCategorical dari fitur masukan.
+
+    :param num_inputs:     (int) Dimensi fitur masukan.
+    :param num_outputs:    (int) Jumlah kategori (aksi diskrit).
+    :param use_orthogonal: (bool) Gunakan inisialisasi ortogonal.
+    :param gain:           (float) Gain inisialisasi bobot lapisan output.
+    """
     def __init__(self, num_inputs, num_outputs, use_orthogonal=True, gain=0.01):
         super(Categorical, self).__init__()
         init_method = [nn.init.xavier_uniform_, nn.init.orthogonal_][use_orthogonal]
@@ -69,6 +97,16 @@ class Categorical(nn.Module):
 
 
 class DiagGaussian(nn.Module):
+    """
+    Lapisan yang menghasilkan distribusi Gaussian diagonal dari fitur masukan.
+
+    Mean dihitung melalui lapisan linear; log-std dipelajari sebagai bias independen.
+
+    :param num_inputs:     (int) Dimensi fitur masukan.
+    :param num_outputs:    (int) Dimensi ruang aksi kontinu.
+    :param use_orthogonal: (bool) Gunakan inisialisasi ortogonal.
+    :param gain:           (float) Gain inisialisasi bobot.
+    """
     def __init__(self, num_inputs, num_outputs, use_orthogonal=True, gain=0.01):
         super(DiagGaussian, self).__init__()
 
@@ -92,6 +130,14 @@ class DiagGaussian(nn.Module):
 
 
 class Bernoulli(nn.Module):
+    """
+    Lapisan yang menghasilkan distribusi Bernoulli dari fitur masukan.
+
+    :param num_inputs:     (int) Dimensi fitur masukan.
+    :param num_outputs:    (int) Dimensi ruang aksi biner.
+    :param use_orthogonal: (bool) Gunakan inisialisasi ortogonal.
+    :param gain:           (float) Gain inisialisasi bobot.
+    """
     def __init__(self, num_inputs, num_outputs, use_orthogonal=True, gain=0.01):
         super(Bernoulli, self).__init__()
         init_method = [nn.init.xavier_uniform_, nn.init.orthogonal_][use_orthogonal]
@@ -105,6 +151,13 @@ class Bernoulli(nn.Module):
         return FixedBernoulli(logits=x)
 
 class AddBias(nn.Module):
+    """
+    Menambahkan bias yang dapat dipelajari ke tensor masukan.
+
+    Digunakan oleh DiagGaussian untuk mempelajari log-std secara independen.
+
+    :param bias: (torch.Tensor) Nilai awal bias.
+    """
     def __init__(self, bias):
         super(AddBias, self).__init__()
         self._bias = nn.Parameter(bias.unsqueeze(1))

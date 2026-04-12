@@ -1,14 +1,40 @@
+"""
+cnn.py
+======
+Modul Convolutional Neural Network (CNN) untuk memproses observasi berbentuk gambar.
+
+Digunakan ketika ruang observasi berbentuk tensor 3D (channel, height, width),
+misalnya pada lingkungan dengan observasi visual.
+
+Kelas:
+    - Flatten   : Meratakan tensor multidimensi menjadi vektor 1D.
+    - CNNLayer  : Satu blok CNN: Conv2D → Aktivasi → Flatten → Linear → Linear.
+    - CNNBase   : Pembungkus CNNLayer yang membaca konfigurasi dari argumen.
+"""
 import torch.nn as nn
 from .util import init
 
-"""CNN Modules and utils."""
 
 class Flatten(nn.Module):
+    """Meratakan tensor multidimensi menjadi vektor 1D (kecuali dimensi batch)."""
+
     def forward(self, x):
         return x.view(x.size(0), -1)
 
 
 class CNNLayer(nn.Module):
+    """
+    Satu blok ekstraksi fitur berbasis CNN.
+
+    Arsitektur: Conv2D → Aktivasi → Flatten → Linear → Aktivasi → Linear → Aktivasi.
+
+    :param obs_shape:      (tuple) Bentuk observasi (channel, height, width).
+    :param hidden_size:    (int) Dimensi lapisan tersembunyi.
+    :param use_orthogonal: (bool) Gunakan inisialisasi ortogonal bila True.
+    :param use_ReLU:       (bool) Gunakan ReLU bila True, Tanh bila False.
+    :param kernel_size:    (int) Ukuran kernel konvolusi.
+    :param stride:         (int) Langkah (stride) konvolusi.
+    """
     def __init__(self, obs_shape, hidden_size, use_orthogonal, use_ReLU, kernel_size=3, stride=1):
         super(CNNLayer, self).__init__()
 
@@ -44,6 +70,12 @@ class CNNLayer(nn.Module):
 
 
 class CNNBase(nn.Module):
+    """
+    Pembungkus CNNLayer yang membaca konfigurasi dari argumen pelatihan.
+
+    :param args:      (argparse.Namespace) Argumen pelatihan (hidden_size, use_orthogonal, use_ReLU).
+    :param obs_shape: (tuple) Bentuk observasi (channel, height, width).
+    """
     def __init__(self, args, obs_shape):
         super(CNNBase, self).__init__()
 

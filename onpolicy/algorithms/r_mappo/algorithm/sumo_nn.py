@@ -1,3 +1,24 @@
+"""
+sumo_nn.py
+==========
+Arsitektur jaringan neural berbasis Transformer untuk X-Light.
+
+Modul ini mengimplementasikan "Transformer on Transformer" yang menjadi inti
+dari X-Light: dua tingkat Transformer encoder yang memproses observasi lalu lintas
+lintas-waktu dan lintas-arah lajur.
+
+Kelas utama:
+    - PositionalEncoding        : Encoding posisi sinusoidal untuk Transformer.
+    - TransformerEncoderLayerNoLN: Lapisan Transformer tanpa Layer Normalization.
+    - TransformerEncoderPolicy  : Model dua-tingkat (inner + outer Transformer)
+                                  yang mengekstrak representasi dari observasi.
+    - ActorModel                : Head aktor, memetakan representasi ke logit aksi.
+    - CriticModel               : Head kritik, memprediksi nilai dan state berikutnya.
+
+Fungsi pembantu:
+    - fc_block        : Membangun blok fully-connected dengan aktivasi opsional.
+    - sequential_pack : Membungkus daftar lapisan menjadi nn.Sequential.
+"""
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -53,6 +74,17 @@ class RunningMeanStd(object):
 
 
 class PositionalEncoding(nn.Module):
+    """
+    Encoding posisi sinusoidal untuk input Transformer.
+
+    Menambahkan informasi posisi waktu ke dalam embedding agar Transformer
+    dapat memahami urutan sekuens observasi.
+
+    :param d_model:  (int) Dimensi model / embedding.
+    :param dropout:  (float) Probabilitas dropout.
+    :param max_len:  (int) Panjang sekuens maksimum yang didukung.
+    :param device:   (str) Perangkat komputasi.
+    """
     def __init__(self, d_model, dropout=0.1, max_len=5000, device='cpu'):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
@@ -74,6 +106,18 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerEncoderLayerNoLN(nn.Module):
+    """
+    Satu lapisan Transformer Encoder tanpa Layer Normalization.
+
+    Implementasi pre-norm dihilangkan untuk efisiensi; menggunakan T-Fixup
+    initialization sebagai gantinya agar training tetap stabil.
+
+    :param d_model:        (int) Dimensi model.
+    :param nhead:          (int) Jumlah attention head.
+    :param dim_feedforward:(int) Dimensi lapisan feedforward dalam.
+    :param dropout:        (float) Probabilitas dropout.
+    :param activation:     (str) Fungsi aktivasi ('relu' atau 'gelu').
+    """
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation="relu"):
         super(TransformerEncoderLayerNoLN, self).__init__()
         self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
@@ -553,6 +597,14 @@ def fc_block(
     return sequential_pack(block)
     
 class ActorModel(nn.Module):
+    """
+    Head aktor: memetakan representasi tersembunyi ke logit aksi.
+
+    Arsitektur: Linear(hidden) → ReLU → Linear(action_size).
+
+    :param hidden_size:  (int) Dimensi representasi masukan dari Transformer.
+    :param action_size:  (int) Jumlah aksi yang tersedia (default 8 fase).
+    """
     def __init__(self, hidden_size, action_size):
         super(ActorModel, self).__init__()
         self.name = 'actor'
@@ -563,11 +615,24 @@ class ActorModel(nn.Module):
         )
 
     def forward(self, hidden_states):
+        """
+        :param hidden_states: (torch.Tensor) Representasi dari Transformer, bentuk [B, hidden_size].
+        :return: (torch.Tensor) Logit untuk setiap aksi, bentuk [B, action_size].
+        """
         outputs = self.model(hidden_states)
         return outputs
 
 
 class CriticModel(nn.Module):
+    """
+    Head kritik: mengestimasi nilai (value) dan prediksi state berikutnya.
+
+    Memiliki dua cabang:
+    - Cabang nilai (c): menghasilkan satu skalar nilai V(s).
+    - Cabang prediksi (p): menghasilkan prediksi observasi berikutnya (auxiliary task).
+
+    :param hidden_size: (int) Dimensi representasi masukan dari Transformer.
+    """
     def __init__(self, hidden_size):
         super(CriticModel, self).__init__()
         self.name = 'critic'
@@ -577,6 +642,11 @@ class CriticModel(nn.Module):
         self.p_fc2 = nn.Linear(int(hidden_size / 2), 56)
 
     def forward(self, hidden_states):
+        """
+        :param hidden_states: (torch.Tensor) Representasi dari Transformer, bentuk [B, hidden_size].
+        :return c2: (torch.Tensor) Estimasi nilai V(s), bentuk [B, 1].
+        :return p2: (torch.Tensor) Prediksi observasi berikutnya, bentuk [B, 56].
+        """
         c1 = self.c_fc1(hidden_states)
         p1 = self.p_fc1(hidden_states)
         c2 = self.c_fc2(torch.cat([c1, p1], dim=-1))

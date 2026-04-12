@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
 # encoding: utf-8
+"""
+config.py (sumo_files_marl)
+===========================
+Konfigurasi lingkungan simulasi SUMO untuk X-Light.
+
+Variabel ``config`` adalah kamus pusat yang mengontrol semua parameter
+lingkungan, termasuk:
+    - Nama eksperimen dan panjang episode.
+    - Parameter PPO (koefisien loss nilai dan prediksi).
+    - Parameter lingkungan: jumlah aksi, bentuk observasi, durasi fase lampu,
+      jenis reward, dan kunci state yang digunakan.
+    - Pengaturan penyimpanan model.
+    - Panjang urutan MDP (mdp_length) untuk Transformer.
+
+Cara penggunaan:
+    from onpolicy.envs.sumo_files_marl.config import config
+"""
 name = 'TIT_mdp_pad_mask_pred3_cls_token_addind_3'
 config = {
     'name': name,

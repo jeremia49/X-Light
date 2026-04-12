@@ -1,4 +1,16 @@
+"""
+valuenorm.py (utils)
+=====================
+Normalisasi nilai (value normalization) menggunakan running statistics.
 
+Modul ini mengimplementasikan kelas ValueNorm yang melacak mean dan varians
+secara online dengan exponential moving average (EMA). Digunakan sebagai
+alternatif PopArt untuk menormalisasi prediksi nilai kritik selama pelatihan.
+
+Referensi:
+    - "Improving Sample Efficiency in Model-Free Reinforcement Learning from Images"
+      (Laskin et al., 2020) — teknik debiased running statistics.
+"""
 import numpy as np
 
 import torch
@@ -6,7 +18,18 @@ import torch.nn as nn
 
 
 class ValueNorm(nn.Module):
-    """ Normalize a vector of observations - across the first norm_axes dimensions"""
+    """
+    Normalisasi vektor nilai menggunakan exponential moving average.
+
+    Melacak mean dan mean-of-squares secara online dan menggunakannya
+    untuk menormalisasi (normalize) dan mengembalikan (denormalize) nilai.
+
+    :param input_shape:         (int) Dimensi input.
+    :param norm_axes:           (int) Jumlah dimensi awal untuk dinormalisasi (default: 1).
+    :param beta:                (float) Faktor peluruhan EMA (default: 0.99999).
+    :param per_element_update:  (bool) Jika True, hitung bobot per elemen batch.
+    :param epsilon:             (float) Nilai kecil untuk stabilitas numerik.
+    """
 
     def __init__(self, input_shape, norm_axes=1, beta=0.99999, per_element_update=False, epsilon=1e-5):
         super(ValueNorm, self).__init__()
@@ -24,11 +47,17 @@ class ValueNorm(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
+        """Reset semua running statistics ke nol."""
         self.running_mean.zero_()
         self.running_mean_sq.zero_()
         self.debiasing_term.zero_()
 
     def running_mean_var(self):
+        """
+        Hitung mean dan varians ter-debiased dari running statistics.
+
+        :return: (tuple) (debiased_mean, debiased_var) sebagai torch.Tensor.
+        """
         debiased_mean = self.running_mean / self.debiasing_term.clamp(min=self.epsilon)
         debiased_mean_sq = self.running_mean_sq / self.debiasing_term.clamp(min=self.epsilon)
         debiased_var = (debiased_mean_sq - debiased_mean ** 2).clamp(min=1e-2)
@@ -36,6 +65,11 @@ class ValueNorm(nn.Module):
 
     @torch.no_grad()
     def update(self, input_vector):
+        """
+        Perbarui running statistics dengan batch data baru.
+
+        :param input_vector: (np.ndarray atau torch.Tensor) Vektor nilai baru.
+        """
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)
         input_vector = input_vector.to(self.running_mean.device)  # not elegant, but works in most cases
@@ -54,6 +88,12 @@ class ValueNorm(nn.Module):
         self.debiasing_term.mul_(weight).add_(1.0 * (1.0 - weight))
 
     def normalize(self, input_vector):
+        """
+        Normalisasi vektor input menggunakan running mean dan standar deviasi.
+
+        :param input_vector: (np.ndarray atau torch.Tensor) Data yang akan dinormalisasi.
+        :return:             (torch.Tensor) Data ternormalisasi.
+        """
         # Make sure input is float32
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)

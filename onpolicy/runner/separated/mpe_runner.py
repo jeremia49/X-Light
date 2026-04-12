@@ -1,4 +1,15 @@
-    
+"""
+mpe_runner.py (runner/separated)
+==================================
+Runner pelatihan untuk lingkungan Multi-Particle Environment (MPE)
+dengan kebijakan terpisah per agen.
+
+Kelas yang tersedia:
+    - MPERunner : Subkelas Runner untuk MPE. Mengimplementasikan loop
+                  pelatihan lengkap termasuk rollout, update, evaluasi,
+                  dan rendering.
+"""
+
 import time
 import wandb
 import os
@@ -11,6 +22,7 @@ from onpolicy.runner.separated.base_runner import Runner
 import imageio
 
 def _t2n(x):
+    """Konversi torch Tensor ke numpy array."""
     return x.detach().cpu().numpy()
 
 class MPERunner(Runner):

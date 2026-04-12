@@ -1,3 +1,22 @@
+"""
+shared_buffer.py (utils)
+=========================
+Buffer replay bersama (shared) untuk pelatihan MARL dalam X-Light.
+
+Berisi dua kelas buffer:
+    - SharedReplayBufferSUMO : Buffer utama untuk lingkungan SUMO. Mendukung
+                               penyimpanan sekuens MDP (mdplength) dan hidden
+                               state dari shared_NN. Digunakan dalam R_MAPPO_SUMO.
+    - SharedReplayBuffer     : Buffer standar untuk lingkungan umum (non-SUMO).
+                               Mendukung recurrent policy dengan RNN states.
+
+Kedua kelas mendukung:
+    - insert()             : Simpan satu langkah transisi ke buffer.
+    - after_update()       : Reset step counter setelah update.
+    - compute_returns()    : Hitung return dengan GAE atau Monte Carlo.
+    - recurrent_generator(): Generator mini-batch untuk recurrent policy.
+    - feed_forward_generator(): Generator mini-batch untuk feedforward policy.
+"""
 import torch
 import numpy as np
 from onpolicy.utils.util import get_shape_from_obs_space, get_shape_from_act_space

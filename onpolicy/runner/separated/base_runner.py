@@ -1,4 +1,17 @@
-    
+"""
+base_runner.py (runner/separated)
+===================================
+Kelas dasar runner pelatihan dengan kebijakan terpisah (separated policy).
+
+Digunakan untuk algoritma IPPO di mana setiap agen memiliki jaringan policy
+dan buffer pengalaman-nya sendiri (berbeda dari shared policy).
+
+Kelas yang tersedia:
+    - Runner : Base runner dengan buffer SeparatedReplayBuffer per agen.
+               Menyediakan antarmuka run(), warmup(), collect(), insert(),
+               compute(), train(), save(), restore(), log_train(), log_env().
+"""
+
 import time
 import wandb
 import os

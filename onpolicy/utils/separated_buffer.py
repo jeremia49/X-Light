@@ -1,3 +1,21 @@
+"""
+separated_buffer.py (utils)
+============================
+Buffer replay terpisah (separated) untuk pelatihan MARL dengan kebijakan
+individual per agen (separated policy / IPPO).
+
+Tidak seperti SharedReplayBuffer, buffer ini menyimpan data secara terpisah
+untuk setiap agen sehingga setiap agen dapat memiliki parameter policy-nya
+sendiri.
+
+Kelas yang tersedia:
+    - SeparatedReplayBuffer : Buffer pengalaman per-agen. Mendukung:
+                              - insert()              : Simpan transisi.
+                              - after_update()        : Reset step counter.
+                              - compute_returns()     : Hitung return dengan GAE.
+                              - recurrent_generator() : Mini-batch untuk recurrent.
+                              - feed_forward_generator(): Mini-batch untuk FF.
+"""
 import torch
 import numpy as np
 from collections import defaultdict
@@ -11,6 +29,14 @@ def _cast(x):
     return x.transpose(1,0,2).reshape(-1, *x.shape[2:])
 
 class SeparatedReplayBuffer(object):
+    """
+    Buffer replay untuk satu agen dalam pelatihan MARL separated policy.
+
+    :param args:            (argparse.Namespace) Argumen konfigurasi pelatihan.
+    :param obs_space:       (gym.Space) Ruang observasi agen.
+    :param share_obs_space: (gym.Space) Ruang observasi terpusat (centralized).
+    :param act_space:       (gym.Space) Ruang aksi agen.
+    """
     def __init__(self, args, obs_space, share_obs_space, act_space):
         self.episode_length = args.episode_length
         self.n_rollout_threads = args.n_rollout_threads

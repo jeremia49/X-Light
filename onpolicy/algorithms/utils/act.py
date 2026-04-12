@@ -1,3 +1,15 @@
+"""
+act.py
+======
+Lapisan aksi (ACTLayer) yang mengubah fitur tersembunyi menjadi distribusi aksi.
+
+ACTLayer mendukung berbagai jenis ruang aksi:
+    - Discrete      : Pemilihan satu aksi diskrit (digunakan X-Light untuk fase lampu).
+    - Box           : Aksi kontinu dengan distribusi Gaussian diagonal.
+    - MultiBinary   : Beberapa keputusan biner independen.
+    - MultiDiscrete : Beberapa ruang diskrit sekaligus.
+    - Mixed         : Gabungan kontinu + diskrit.
+"""
 from .distributions import Bernoulli, Categorical, DiagGaussian
 import torch
 import torch.nn as nn

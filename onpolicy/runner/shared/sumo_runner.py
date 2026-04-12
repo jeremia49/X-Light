@@ -1,3 +1,20 @@
+"""
+sumo_runner.py
+==============
+Loop pelatihan dan evaluasi khusus untuk lingkungan SUMO dalam X-Light.
+
+SUMORunner mengelola siklus penuh per episode:
+    1. warmup() : Reset lingkungan dan inisialisasi buffer.
+    2. collect() : Jalankan policy untuk mengumpulkan pengalaman per langkah.
+    3. insert()  : Simpan data ke buffer replay.
+    4. compute() : Hitung return (GAE) untuk data yang terkumpul.
+    5. train()   : Perbarui bobot jaringan menggunakan PPO.
+    6. Logging, evaluasi, dan penyimpanan model secara periodik.
+
+Mode:
+    - Training mode (not_update=False): Jalankan stochastic policy dan perbarui bobot.
+    - Evaluation mode (not_update=True): Jalankan deterministic policy tanpa update.
+"""
 import time
 import numpy as np
 import torch
@@ -5,11 +22,19 @@ from onpolicy.runner.shared.base_runner import Runner, SUMOBaseRunner
 import wandb
 import imageio
 
+
 def _t2n(x):
+    """Konversi torch Tensor ke numpy array (detach dari komputasi graph)."""
     return x.detach().cpu().numpy()
 
 
 def get_reward(reward):
+    """
+    Hitung total reward per persimpangan dari kamus reward multi-metrik.
+
+    :param reward: (dict) Peta tl_id → {metrik: nilai}.
+    :return:       (list) Total reward per persimpangan.
+    """
     ans = []
     for i in reward.keys():
         ans.append(sum(reward[i].values()))
@@ -131,6 +156,7 @@ class SUMORunner(SUMOBaseRunner):
 
 
     def warmup(self):
+        """Reset semua lingkungan dan isi buffer replay dengan observasi awal."""
         # reset env
         obs = self.envs.reset()
 
@@ -150,6 +176,13 @@ class SUMORunner(SUMOBaseRunner):
     
     
     def get_ava_actions(self, ava):
+        """
+        Bangun matriks available_actions dari daftar indeks fase yang tidak tersedia.
+
+        :param ava: (np.ndarray) Indeks fase tidak tersedia per agen.
+        :return:    (np.ndarray) Matriks available_actions [threads, agents, num_actions],
+                    bernilai 1 jika aksi tersedia dan 0 jika tidak.
+        """
         available_actions = np.ones((self.all_args.n_rollout_threads, self.all_args.num_agents, self.all_args.num_actions))
         if len(ava.shape) == 2: 
             for i in range(self.all_args.num_agents):
@@ -165,6 +198,16 @@ class SUMORunner(SUMOBaseRunner):
     
     @torch.no_grad()
     def collect(self, step, deterministic):
+        """
+        Jalankan policy untuk satu langkah dan kumpulkan data.
+
+        :param step:          (int) Indeks langkah dalam episode.
+        :param deterministic: (bool) Jika True, gunakan aksi greedy (argmax).
+        :return values:       (np.ndarray) Prediksi nilai per agen.
+        :return actions:      (np.ndarray) Aksi yang dipilih per agen.
+        :return action_log_probs: (np.ndarray) Log-prob aksi.
+        :return hidden_layer: (np.ndarray) Representasi Transformer (untuk buffer).
+        """
         self.trainer.prep_rollout()
         self.ava = self.envs.get_unava_phase_index()
         value, action, action_log_prob, hidden_layer \
@@ -201,6 +244,12 @@ class SUMORunner(SUMOBaseRunner):
         return values, actions, action_log_probs, hidden_layer
 
     def insert(self, data):
+        """
+        Simpan data satu langkah ke dalam buffer replay.
+
+        :param data: (tuple) Berisi: obs, rewards, dones, infos, values,
+                     actions, action_log_probs, hidden_layer, available_actions.
+        """
         obs, rewards, dones, infos, values, actions, action_log_probs, hidden_layer, available_actions = data
 
         # rnn_states[dones == True] = np.zeros(((dones == True).sum(), self.recurrent_N, self.hidden_size), dtype=np.float32)

@@ -1,3 +1,15 @@
+"""
+GAT_nn.py
+=========
+Implementasi Graph Attention Network (GAT) untuk memodelkan hubungan spasial
+antar persimpangan lalu lintas dalam jaringan jalan.
+
+GAT digunakan sebagai alternatif atau pelengkap Transformer untuk menangkap
+ketergantungan antar agen berdasarkan topologi graf jaringan jalan.
+
+Referensi:
+    Veličković et al., "Graph Attention Networks", ICLR 2018.
+"""
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
@@ -7,7 +19,17 @@ import numpy as np
 
 class GraphAttentionLayer(nn.Module):
     """
-    Simple GAT layer,
+    Satu lapisan Graph Attention Network (GAT).
+
+    Lapisan ini menghitung representasi baru setiap node dengan cara
+    mengagregasi fitur node-node tetangganya menggunakan bobot attention.
+
+    :param in_features:  (int) Dimensi fitur masukan setiap node.
+    :param out_features: (int) Dimensi fitur keluaran setiap node.
+    :param dropout:      (float) Probabilitas dropout untuk regularisasi.
+    :param alpha:        (float) Parameter negatif kemiringan LeakyReLU.
+    :param concat:       (bool) Jika True, terapkan aktivasi ELU pada output.
+    :param device:       (str) Perangkat komputasi ('cpu' atau 'cuda').
     """
     def __init__(self, in_features, out_features, dropout, alpha, concat=True, device='cpu'):
         super(GraphAttentionLayer, self).__init__()
@@ -30,8 +52,12 @@ class GraphAttentionLayer(nn.Module):
     
     def forward(self, inp, adj):
         """
-        inp: input_fea [N, in_features]  in_features表示节点的输入特征向量元素个数
-        adj: 图的邻接矩阵 维度[N, N] 非零即一，数据结构基本知识
+        Hitung attention antar node dan hasilkan representasi baru.
+
+        :param inp: (torch.Tensor) Fitur masukan node, bentuk [N, in_features].
+        :param adj: (torch.Tensor) Matriks adjacency graf, bentuk [N, N],
+                    bernilai 1 jika ada edge dan 0 jika tidak.
+        :return:    (torch.Tensor) Fitur keluaran node, bentuk [N, out_features].
         """
         h = torch.mm(inp, self.W)   # [N, out_features]
         N = h.size()[0]    # N 图的节点数
@@ -60,11 +86,23 @@ class GraphAttentionLayer(nn.Module):
     
     
 class GAT(nn.Module):
+    """
+    Multi-head Graph Attention Network (Dense version).
+
+    Menggabungkan beberapa GraphAttentionLayer secara paralel (multi-head attention),
+    lalu menghubungkan keluarannya untuk mendapatkan representasi node yang kaya.
+
+    :param n_feat:   (int) Dimensi fitur masukan node.
+    :param n_hid:    (int) Dimensi tersembunyi setiap head attention.
+    :param n_class:  (int) Dimensi fitur keluaran akhir.
+    :param dropout:  (float) Probabilitas dropout.
+    :param alpha:    (float) Parameter kemiringan LeakyReLU.
+    :param n_heads:  (int) Jumlah head attention yang diparalelkan.
+    :param node_num: (int) Jumlah node (persimpangan) dalam satu lingkungan.
+    :param n_thr:    (int) Jumlah thread / lingkungan paralel.
+    :param device:   (str) Perangkat komputasi ('cpu' atau 'cuda').
+    """
     def __init__(self, n_feat, n_hid, n_class, dropout, alpha, n_heads, node_num, n_thr, device='cpu'):
-        """Dense version of GAT
-        n_heads 表示有几个GAL层，最后进行拼接在一起，类似self-attention
-        从不同的子空间进行抽取特征。
-        """
         super(GAT, self).__init__()
         self.dropout = dropout 
         self.node_num = node_num
@@ -79,6 +117,7 @@ class GAT(nn.Module):
         self.out_att = GraphAttentionLayer(n_hid * n_heads, n_class, dropout=dropout,alpha=alpha, concat=False, device=self.device)
     
     def to_adj(self, edge_index):
+        """Ubah daftar edge (edge_index) menjadi matriks adjacency padat."""
         # adj = torch.zeros(self.node_num_batch, self.node_num_batch, device=self.device) ## 其实是 node_num* n_thr
         adj = torch.zeros(edge_index.shape[0], edge_index.shape[0], device=self.device) ## 其实是 node_num* n_thr
         for i in range(edge_index.shape[0]):
@@ -94,6 +133,14 @@ class GAT(nn.Module):
         return adj.long()
     
     def forward(self, x, edge_index, backward=False):
+        """
+        Jalankan forward pass GAT.
+
+        :param x:          (torch.Tensor) Fitur node, bentuk [N, n_feat].
+        :param edge_index: (torch.Tensor) Indeks edge antar node.
+        :param backward:   (bool) Tidak digunakan saat ini (reserved).
+        :return:           (torch.Tensor) Log-softmax distribusi kelas, bentuk [N, n_class].
+        """
         adj = self.to_adj(edge_index)
         # if not backward:
         #     adj = self.to_adj(edge_index)

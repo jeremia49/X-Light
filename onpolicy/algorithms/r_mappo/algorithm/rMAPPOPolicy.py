@@ -1,3 +1,22 @@
+"""
+rMAPPOPolicy.py (algorithms/r_mappo/algorithm)
+===============================================
+Kelas Policy untuk algoritma MAPPO dan IPPO dalam X-Light.
+
+Berisi dua kelas policy:
+    - R_MAPPOPolicy_SUMO : Policy untuk lingkungan SUMO. Menggabungkan
+                           shared_NN (Transformer encoder), aktor, dan
+                           kritik ke dalam satu optimizer.
+    - R_MAPPOPolicy      : Policy standar MAPPO untuk lingkungan umum.
+                           Aktor dan kritik memiliki optimizer terpisah.
+
+Tanggung jawab utama:
+    - get_actions()      : Hitung aksi dan prediksi nilai saat rollout.
+    - get_values()       : Hitung prediksi nilai dari kritik.
+    - evaluate_actions() : Hitung log-prob, entropi, dan nilai saat training.
+    - act()              : Hitung aksi saja (tanpa nilai).
+    - lr_decay()         : Kurangi learning rate secara linear.
+"""
 import torch
 from onpolicy.algorithms.r_mappo.algorithm.r_actor_critic import R_Actor, R_Critic, R_Actor_SUMO, R_Critic_SUMO, shared_NN
 from onpolicy.utils.util import update_linear_schedule

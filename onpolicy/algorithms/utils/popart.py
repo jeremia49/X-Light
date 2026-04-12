@@ -1,3 +1,16 @@
+"""
+popart.py
+=========
+Implementasi algoritma normalisasi reward **PopArt** (Preserving Outputs Precisely,
+while Adaptively Rescaling Targets).
+
+PopArt secara adaptif menormalkan target nilai (returns) agar fungsi nilai
+dapat belajar dengan stabil meski skala reward berubah-ubah. Bobot lapisan
+output kritik diperbarui otomatis untuk mempertahankan prediksi sebelumnya.
+
+Referensi:
+    van Hasselt et al., "Learning Values Across Many Orders of Magnitude", NeurIPS 2016.
+"""
 import math
 import numpy as np
 import torch
@@ -5,6 +18,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class PopArt(torch.nn.Module):
+    """
+    Lapisan linear dengan normalisasi PopArt untuk target nilai.
+
+    :param input_shape:  (int) Dimensi masukan lapisan.
+    :param output_shape: (int) Dimensi keluaran lapisan (biasanya 1 untuk nilai skalar).
+    :param norm_axes:    (int) Jumlah sumbu yang dinormalisasi.
+    :param beta:         (float) Faktor peluruhan exponential moving average.
+    :param epsilon:      (float) Nilai kecil untuk kestabilan numerik.
+    :param device:       (torch.device) Perangkat komputasi.
+    """
     
     def __init__(self, input_shape, output_shape, norm_axes=1, beta=0.99999, epsilon=1e-5, device=torch.device("cpu")):
         
@@ -29,6 +52,7 @@ class PopArt(torch.nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
+        """Inisialisasi ulang bobot (Kaiming uniform) dan nol-kan statistik."""
         torch.nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(self.weight)
@@ -70,12 +94,14 @@ class PopArt(torch.nn.Module):
         self.bias = (old_stddev * self.bias + old_mean - new_mean) / new_stddev
 
     def debiased_mean_var(self):
+        """Hitung mean dan variansi yang telah di-debias dari EMA."""
         debiased_mean = self.mean / self.debiasing_term.clamp(min=self.epsilon)
         debiased_mean_sq = self.mean_sq / self.debiasing_term.clamp(min=self.epsilon)
         debiased_var = (debiased_mean_sq - debiased_mean ** 2).clamp(min=1e-2)
         return debiased_mean, debiased_var
 
     def normalize(self, input_vector):
+        """Normalisasi vektor masukan menggunakan statistik EMA yang berjalan."""
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)
         input_vector = input_vector.to(**self.tpdv)
@@ -86,6 +112,7 @@ class PopArt(torch.nn.Module):
         return out
 
     def denormalize(self, input_vector):
+        """Kembalikan vektor yang telah dinormalisasi ke skala aslinya."""
         if type(input_vector) == np.ndarray:
             input_vector = torch.from_numpy(input_vector)
         input_vector = input_vector.to(**self.tpdv)

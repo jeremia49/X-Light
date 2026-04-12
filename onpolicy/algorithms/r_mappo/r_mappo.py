@@ -1,3 +1,19 @@
+"""
+r_mappo.py (algorithms/r_mappo)
+================================
+Implementasi algoritma pelatihan MAPPO dan IPPO untuk X-Light.
+
+Berisi dua kelas trainer:
+    - R_MAPPO_SUMO : Trainer utama untuk lingkungan SUMO dengan shared_NN.
+                     Menggabungkan loss aktor, kritik, dan prediksi observasi.
+    - R_MAPPO      : Trainer standar MAPPO/IPPO untuk lingkungan umum.
+
+Kedua kelas mengimplementasikan:
+    - Clipped surrogate objective (PPO)
+    - Value clipping dan Huber/MSE loss untuk kritik
+    - Normalisasi keuntungan (advantage normalization)
+    - Dukungan PopArt dan ValueNorm untuk normalisasi reward
+"""
 import numpy as np
 import torch
 import torch.nn as nn
@@ -252,11 +268,13 @@ class R_MAPPO_SUMO():
         return train_info
 
     def prep_training(self):
+        """Aktifkan mode training untuk aktor, kritik, dan shared_NN."""
         self.policy.actor.train()
         self.policy.critic.train()
         self.policy.shared_NN.train()
 
     def prep_rollout(self):
+        """Aktifkan mode evaluasi untuk aktor, kritik, dan shared_NN."""
         self.policy.actor.eval()
         self.policy.critic.eval()
         self.policy.shared_NN.eval()
@@ -477,9 +495,11 @@ class R_MAPPO():
         return train_info
 
     def prep_training(self):
+        """Aktifkan mode training untuk aktor dan kritik."""
         self.policy.actor.train()
         self.policy.critic.train()
 
     def prep_rollout(self):
+        """Aktifkan mode evaluasi untuk aktor dan kritik."""
         self.policy.actor.eval()
         self.policy.critic.eval()

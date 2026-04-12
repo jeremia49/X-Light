@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
 # encoding: utf-8
+"""
+sim_env.py
+==========
+Mesin simulasi inti (TSCSimulator) yang berinteraksi langsung dengan SUMO.
+
+TSCSimulator bertanggung jawab untuk:
+    - Memulai dan mengelola proses simulasi SUMO (melalui libsumo atau traci).
+    - Mengekstrak infrastruktur jaringan jalan (persimpangan, lajur, posisi).
+    - Menentukan persimpangan valid dan membangun objek Intersection.
+    - Menjalankan aksi (set fase lampu) dan mengumpulkan state serta reward.
+    - Mengelola adjacency antar persimpangan untuk pengiriman pesan antar agen.
+
+Alur kerja per episode:
+    reset() → loop: step(action) → terminate()
+"""
 import copy
 import os
 import subprocess
@@ -15,6 +30,17 @@ from onpolicy.envs.sumo_files_marl.env.intersection import Intersection
 
 
 class TSCSimulator:
+    """
+    Simulator Traffic Signal Control (TSC) berbasis SUMO.
+
+    Mengelola siklus hidup simulasi lalu lintas lengkap:
+    inisialisasi, eksekusi aksi, kalkulasi reward, dan terminasi.
+
+    :param config:      (dict) Konfigurasi lingkungan (sumocfg_file, reward_type, dll.).
+    :param port:        (int) Port TCP untuk koneksi traci (mode non-libsumo).
+    :param not_default: (bool) Jika True, gunakan logika fase kustom (8 fase standar).
+    :param output_path: (str atau None) Path untuk menyimpan file trip info SUMO.
+    """
     def __init__(self, config, port, not_default=True, output_path=None):
         self.not_default = not_default
         self.port = port
@@ -92,6 +118,18 @@ class TSCSimulator:
         self.terminate()
 
     def _init_sim(self, sumocfg_file, seed, episode_length_time, gui=False):
+        """
+        Inisialisasi dan mulai proses simulasi SUMO.
+
+        Memilih antara libsumo (cepat, C++) atau traci (jaringan, fleksibel).
+        Khusus untuk skenario ingolstadt21 dan cologne8, simulasi dimulai dari
+        waktu tertentu agar traffic sudah ramai sejak awal episode.
+
+        :param sumocfg_file:      (str) Path ke file konfigurasi SUMO (.sumocfg).
+        :param seed:              (int) Seed acak untuk SUMO.
+        :param episode_length_time: (int) Durasi episode dalam detik simulasi.
+        :param gui:               (bool) Tampilkan GUI SUMO jika True.
+        """
         self.episode_length_time = episode_length_time
         if gui:
             app = 'sumo-gui'
@@ -148,13 +186,27 @@ class TSCSimulator:
         # self.sim = traci.start(command)
 
     def _init_action_type(self, action_type):
+        """Validasi dan tetapkan tipe aksi ('select_phase', 'change', atau 'generate')."""
         assert action_type in ['select_phase', "change", "generate"]
         self.action_type = action_type
 
     def terminate(self):
+        """Tutup koneksi SUMO dan hentikan simulasi."""
         self.sim.close()
 
     def _do_action(self, action):
+        """
+        Terapkan aksi ke setiap persimpangan di simulator SUMO.
+
+        Mendukung tiga tipe aksi:
+        - ``select_phase``: Pilih fase hijau secara langsung (digunakan X-Light).
+        - ``change``       : Beralih ke fase berikutnya atau tetap.
+        - ``generate``     : Atur string fase lampu secara bebas.
+
+        Setiap pergantian fase diselingi durasi lampu kuning otomatis.
+
+        :param action: (dict) Peta tl_id → indeks fase yang dipilih.
+        """
         if self.action_type == 'select_phase':
             for tl, a in action.items():
                 assert a / 2 not in self._crosses[tl].unava_index, "{}-{}-{}".format(tl, a, self._crosses[tl].unava_index)
@@ -208,12 +260,22 @@ class TSCSimulator:
             raise NotImplemented
 
     def _get_reward(self):
+        """Kumpulkan reward dari setiap persimpangan aktif."""
 
         list_reward = {tl: self._crosses[tl].get_reward(self.reward_type) for tl in self.all_tls}
 
         return list_reward
 
     def step(self, action):
+        """
+        Jalankan satu langkah simulasi.
+
+        :param action: (dict) Aksi per persimpangan.
+        :return obs:    (dict) State observasi terbaru per persimpangan.
+        :return reward: (dict) Reward per persimpangan dan per metrik.
+        :return done:   (bool) True jika episode selesai.
+        :return info:   (dict) Akumulasi reward sejak awal episode.
+        """
         self._do_action(action)
         for tl in self.all_tls:
             self._crosses[tl].update_timestep()
@@ -288,12 +350,22 @@ class TSCSimulator:
             self._crosses[tl].update_timestep()
 
     def _get_state(self):
+        """Kumpulkan state observasi dari semua persimpangan aktif."""
         states = {}
         for tid in self.all_tls:
             states[tid] = self._crosses[tid].get_state()
         return states
 
     def _infastructure_extraction1(self, sumocfg_file):
+        """
+        Ekstrak informasi infrastruktur jaringan jalan dari file XML SUMO (Pass 1).
+
+        Membaca file network XML dan mengekstrak lajur masuk/keluar, posisi lajur,
+        dan fase lampu untuk setiap persimpangan ber-traffic-light.
+
+        :param sumocfg_file: (str) Path ke file .sumocfg.
+        :return:             (dict) Kamus infrastruktur per persimpangan.
+        """
         e = xml.etree.ElementTree.parse(sumocfg_file).getroot()
         network_file_name = e.find('input/net-file').attrib['value']
         network_file = os.path.join(os.path.split(sumocfg_file)[0], network_file_name)
@@ -371,6 +443,18 @@ class TSCSimulator:
             # )
 
     def _infastructure_extraction2(self, sumocfg_file, traffic_light_node_dict, dis=False):
+        """
+        Hitung adjacency antar persimpangan (Pass 2).
+
+        Dua mode:
+        - ``dis=True``  : Adjacency berdasarkan jarak Euclidean (top-k terdekat).
+        - ``dis=False`` : Adjacency berdasarkan konektivitas arah (BFS N-W-S-E).
+
+        :param sumocfg_file:            (str) Path ke file .sumocfg.
+        :param traffic_light_node_dict: (dict) Hasil dari _infastructure_extraction1.
+        :param dis:                     (bool) Mode jarak vs. konektivitas.
+        :return:                        (dict) Kamus infrastruktur dengan adjacency_row.
+        """
         e = xml.etree.ElementTree.parse(sumocfg_file).getroot()
         network_file_name = e.find('input/net-file').attrib['value']
         network_file = os.path.join(os.path.split(sumocfg_file)[0], network_file_name)

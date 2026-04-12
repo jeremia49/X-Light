@@ -1,4 +1,26 @@
 #!/usr/bin/env python
+"""
+train_sumo.py (scripts/train)
+==============================
+Skrip utama untuk melatih agen MARL pada lingkungan lalu lintas SUMO.
+
+Fungsi utama:
+    - make_train_env() : Buat lingkungan pelatihan (single/multi-thread,
+                         mendukung co-training multi-skenario).
+    - make_eval_env()  : Buat lingkungan evaluasi terpisah.
+    - parse_args()     : Tambahkan argumen khusus SUMO ke parser konfigurasi.
+    - main()           : Inisialisasi semua komponen dan jalankan training loop.
+
+Cara menjalankan:
+    Jalankan langsung dari baris perintah atau import fungsi main() dari
+    skrip lain. Konfigurasi co-training dapat diaktifkan dengan flag
+    ``--cotrain True`` dan daftar file sumocfg.
+
+Didukung:
+    - Algoritma  : MAPPO, IPPO, RMAPPO
+    - Logging    : TensorBoard (default) atau WandB
+    - Co-training: Beberapa skenario kota dilatih secara bersamaan
+"""
 import copy
 import sys
 import os
@@ -21,9 +43,14 @@ from onpolicy.envs.sumo_files_marl.config import config as config_env
 
 from onpolicy.envs.env_wrappers import SubprocVecEnv, DummyVecEnv
 
-"""Train script for MPEs."""
-
 def make_train_env(all_args, env_config):
+    """
+    Buat lingkungan pelatihan yang divektorkan.
+
+    :param all_args:   (argparse.Namespace) Argumen konfigurasi pelatihan.
+    :param env_config: (dict) Konfigurasi lingkungan SUMO.
+    :return:           (SubprocVecEnv atau DummyVecEnv) Lingkungan pelatihan.
+    """
     def get_env_fn(rank):
         def init_env():
             if all_args.env_name == "SUMO":
@@ -45,6 +72,12 @@ def make_train_env(all_args, env_config):
 
 
 def make_eval_env(all_args):
+    """
+    Buat lingkungan evaluasi yang divektorkan.
+
+    :param all_args: (argparse.Namespace) Argumen konfigurasi pelatihan.
+    :return:         (SubprocVecEnv atau DummyVecEnv) Lingkungan evaluasi.
+    """
     def get_env_fn(rank):
         def init_env():
             if all_args.env_name == "SUMO":
@@ -63,6 +96,13 @@ def make_eval_env(all_args):
 
 
 def parse_args(args, parser):
+    """
+    Tambahkan argumen khusus SUMO ke parser dan kembalikan hasil parsing.
+
+    :param args:   (list) Daftar argumen baris perintah.
+    :param parser: (argparse.ArgumentParser) Parser konfigurasi dasar.
+    :return:       (argparse.Namespace) Argumen yang telah di-parse.
+    """
     parser.add_argument("--num_agents", type=int, default=0, help="the number of the agents.")
     parser.add_argument('--scenario_name', type=str, default='sumo_test', help="Which scenario to run on")
 
@@ -72,6 +112,16 @@ def parse_args(args, parser):
 
 
 def main(args, meta_test=False):
+    """
+    Titik masuk utama pelatihan X-Light.
+
+    Inisialisasi lingkungan, policy, trainer, buffer, dan jalankan loop
+    pelatihan melalui SUMORunner.
+
+    :param args:      (list) Argumen baris perintah.
+    :param meta_test: (bool) Jika True, jalankan dalam mode meta-testing
+                      (muat model yang telah dilatih tanpa melanjutkan update).
+    """
     parser = get_config()
     all_args = parse_args(args, parser)
     

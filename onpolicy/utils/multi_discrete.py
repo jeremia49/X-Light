@@ -1,3 +1,14 @@
+"""
+multi_discrete.py (utils)
+==========================
+Implementasi ruang aksi MultiDiscrete yang kompatibel dengan versi lama OpenAI Gym.
+
+Modul ini menyimpan versi stabil MultiDiscrete untuk mencegah masalah kompatibilitas
+akibat pembaruan Gym yang mengubah perilaku kelas tersebut.
+
+Sumber asli:
+    https://github.com/openai/gym/blob/1fb81d4e3fb780ccf77fec731287ba07da35eb84/gym/spaces/multi_discrete.py
+"""
 import gym
 import numpy as np
 

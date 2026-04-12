@@ -1,3 +1,12 @@
+"""
+config.py (onpolicy)
+=====================
+Parser argumen konfigurasi terpusat untuk semua eksperimen X-Light.
+
+Menyediakan fungsi get_config() yang mengembalikan ArgumentParser berisi
+semua hyperparameter umum: arsitektur jaringan, algoritma PPO, lingkungan,
+logging, evaluasi, dan rendering.
+"""
 import argparse
 
 
